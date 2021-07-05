@@ -586,6 +586,62 @@ bool ubxMonVerToVerStr(char *str, const int size, const uint8_t *msg, const int 
     return (len > 0) && (len < size);
 }
 
+static int _ubxMonRfStr(char *str, const int size, const uint8_t *msg, const int msgSize)
+{
+    if ( (msg == NULL) || (str == NULL) || (size < 2) ||
+         (UBX_CLSID(msg) != UBX_MON_CLSID) ||
+         (UBX_MSGID(msg) != UBX_MON_RF_MSGID) ||
+         (msgSize < (int)(UBX_FRAME_SIZE + sizeof(UBX_MON_RF_V0_GROUP0_t))) )
+    {
+        return false;
+    }
+
+    // Only prints version, number of blocks and Antenna Status and Power for each RF block
+    UBX_MON_RF_V0_GROUP0_t gr0;
+    int offs = UBX_HEAD_SIZE;
+    memcpy(&gr0, &msg[offs], sizeof(gr0));
+    offs += sizeof(gr0);
+    int nblocks = gr0.nBlocks;
+    UBX_MON_RF_V0_GROUP1_t gr1;
+    int len = 0;
+
+    // Depending on the number of blocks, displays antenna status value of all blocks
+    // 31 corresponds to  max size of "AntStat: %d, AntPower: %d / "
+    if (nblocks != 0) {
+        char * antStatusesAgg = (char *) malloc(26 * nblocks * sizeof(char));
+        if (antStatusesAgg == NULL) {
+            return 0;
+        }
+        antStatusesAgg[0] = '\0';
+        while (offs <= (msgSize - 2 - (int)sizeof(gr1)))
+        {
+            memcpy(&gr1, &msg[offs], sizeof(gr1));
+            char antStatus[31];
+            antStatus[0] = '\0';
+            snprintf(antStatus, sizeof(antStatus), "/ AntStat: %d, AntPower: %d ", gr1.antStatus, gr1.antPower);
+
+            strcat(antStatusesAgg, antStatus);
+
+            offs += sizeof(gr1);
+        }
+
+        if (antStatusesAgg[0] != '\0')
+        {
+            len = snprintf(str, size, "version: %d nBlocks: %d %s", gr0.version, gr0.nBlocks, antStatusesAgg);
+        }
+        free(antStatusesAgg);
+
+    }
+
+    return len;
+}
+
+
+bool ubxMonRfToRfStr(char *str, const int size, const uint8_t *msg, const int msgSize)
+{
+    const int len = _ubxMonRfStr(str, size, msg, msgSize);
+    return (len > 0) && (len < size);
+}
 /* ****************************************************************************************************************** */
 
 static int _strUbxNav(char *info, const int size, const uint8_t *msg, const int msgSize, const int iTowOffs);
@@ -596,6 +652,7 @@ static int _strUbxNavRelposned(char *info, const int size, const uint8_t *msg, c
 static int _strUbxInf(char *info, const int size, const uint8_t *msg, const int msgSize);
 static int _strUbxRxmRawx(char *info, const int size, const uint8_t *msg, const int msgSize);
 static int _strUbxMonVer(char *info, const int size, const uint8_t *msg, const int msgSize);
+static int _strUbxMonRf(char *info, const int size, const uint8_t *msg, const int msgSize);
 static int _strUbxCfgValget(char *info, const int size, const uint8_t *msg, const int msgSize);
 static int _strUbxAckAck(char *info, const int size, const uint8_t *msg, const int msgSize, const bool ack);
 
@@ -682,6 +739,8 @@ bool ubxMessageInfo(char *info, const int size, const uint8_t *msg, const int ms
                 case UBX_MON_VER_MSGID:
                     len = _strUbxMonVer(info, size, msg, msgSize);
                     break;
+                case UBX_MON_RF_MSGID:
+                    len = _strUbxMonRf(info, size, msg, msgSize);
             }
             break;
         case UBX_CFG_CLSID:
@@ -947,6 +1006,11 @@ static int _svListSort(const void *a, const void *b)
 static int _strUbxMonVer(char *info, const int size, const uint8_t *msg, const int msgSize)
 {
     return ubxMonVerToVerStr(info, size, msg, msgSize);
+}
+
+static int _strUbxMonRf(char *info, const int size, const uint8_t *msg, const int msgSize)
+{
+    return ubxMonRfToRfStr(info, size, msg, msgSize);
 }
 
 static const char *_valgetLayerName(const uint8_t layer)

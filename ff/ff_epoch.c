@@ -105,7 +105,7 @@ bool epochCollect(EPOCH_t *coll, PARSER_MSG_t *msg, EPOCH_t *epoch)
 static bool _detectUbx(EPOCH_t *coll, PARSER_MSG_t *msg)
 {
     const uint8_t clsId = UBX_CLSID(msg->data);
-    if (clsId != UBX_NAV_CLSID)
+    if (clsId != UBX_NAV_CLSID && clsId != UBX_MON_CLSID)
     {
         return false;
     }
@@ -164,6 +164,13 @@ static bool _detectUbx(EPOCH_t *coll, PARSER_MSG_t *msg)
                 coll->_detectHaveTow = true;
             }
             break;
+        case UBX_MON_RF_MSGID:
+            if (msg->size > (UBX_FRAME_SIZE + 4))
+            {
+                detect = true;
+            }
+            break;
+
     }
     return detect;
 }
@@ -531,7 +538,7 @@ enum { HAVE_NOTHING = 0, HAVE_NMEA = 1, HAVE_UBX = 2, HAVE_UBX_HP = 3 };
 static void _collectUbx(EPOCH_t *coll, PARSER_MSG_t *msg)
 {
     const uint8_t clsId = UBX_CLSID(msg->data);
-    if (clsId != UBX_NAV_CLSID)
+    if (clsId != UBX_NAV_CLSID && clsId != UBX_MON_CLSID)
     {
         return;
     }
@@ -851,6 +858,33 @@ static void _collectUbx(EPOCH_t *coll, PARSER_MSG_t *msg)
 					coll->dateOfLsGpsDn  = leapsec.dateOfLsGpsDn;
 					coll->haveLeapSecondEvent = true;
 				}
+            }
+            break;
+        case UBX_MON_RF_MSGID:
+            if (msg->size >= (int) UBX_MON_RF_V0_MIN_SIZE) {
+                int offs = UBX_HEAD_SIZE;
+                UBX_MON_RF_V0_GROUP0_t gr0;
+                memcpy(&gr0, &msg->data[offs], sizeof(gr0));
+                offs += sizeof(gr0);
+
+                coll->antStatus = 0x5; // Undefined value according to spec
+                coll->antPower = 0x5; // Undefined value according to spec
+                coll->haveAntStatus = false;
+
+                UBX_MON_RF_V0_GROUP1_t gr1;
+                while (offs <= (msg->size - 2 - (int)sizeof(gr1)))
+                {
+                    memcpy(&gr1, &msg->data[offs], sizeof(gr1));
+                    // If we have multiple blocks and one is 0X2 (eq OK) and the next is not,
+                    // Take worst of values
+                    if (coll->antStatus == 0x5 || (coll->antStatus == 0x2 && gr1.antStatus != 0x2))
+                        coll->antStatus = gr1.antStatus;
+                    // Same behaviour but 0x2 means DONT_KNOW
+                    if (coll->antPower == 0x5 || (coll->antPower == 0x2 && gr1.antPower != 0x2))
+                        coll->antPower = gr1.antPower;
+                    coll->haveAntStatus = true;
+                    offs += sizeof(gr1);
+                }
             }
             break;
     }

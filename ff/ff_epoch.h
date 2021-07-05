@@ -286,6 +286,10 @@ typedef struct EPOCH_s
     uint16_t            dateOfLsGpsWn;
     uint16_t            dateOfLsGpsDn;
 
+    bool                haveAntStatus;
+    uint8_t              antStatus;
+    uint8_t              antPower;
+
 
     // Private
     int          _haveFix;
