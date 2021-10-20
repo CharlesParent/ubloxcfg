@@ -72,6 +72,19 @@ bool epochCollect(EPOCH_t *coll, PARSER_MSG_t *msg, EPOCH_t *epoch)
             break;
     }
 
+    // Collect data
+    switch (msg->type)
+    {
+        case PARSER_MSGTYPE_UBX:
+            _collectUbx(coll, msg);
+            break;
+        case PARSER_MSGTYPE_NMEA:
+            _collectNmea(coll, msg);
+            break;
+        default:
+            break;
+    }
+
     // Output epoch
     if (detect)
     {
@@ -89,18 +102,6 @@ bool epochCollect(EPOCH_t *coll, PARSER_MSG_t *msg, EPOCH_t *epoch)
         coll->_detectHaveTow = detectHaveTow;
     }
 
-    // Collect data
-    switch (msg->type)
-    {
-        case PARSER_MSGTYPE_UBX:
-            _collectUbx(coll, msg);
-            break;
-        case PARSER_MSGTYPE_NMEA:
-            _collectNmea(coll, msg);
-            break;
-        default:
-            break;
-    }
     return detect;
 }
 
